@@ -15,11 +15,13 @@ you can add games by paths.
 you can add games by name and if its easily findable(for linux i use a command idk how it works lol) then it adds it.
 complete gui that looks like garbage and will forever.
 multiple apps in the same time --unintentional i kinda thought it wont work but for some reason it does.
+# new
+just added flatpak support
 
 current "features"
-it can search your whole system! but it fails 99% of the time and you cant cancel it .
-for some unkown reason i didnt want to research it all opens under the inteliji thing so you need to hover on it and pick your program.
-dont do things wrong it will crash everything.
+it can search your whole system! but it fails 99% of the time and you cant cancel it .//removed it:D
+for some unkown reason i didnt want to research it all opens under the inteliji thing so you need to hover on it and pick your program.//except for flatpaks
+dont do things wrong it will crash everything.//most of the time not always
 
 # things i had to learn
 VERY basic swing and how to tell chatgpt to do the little bit harder part.
