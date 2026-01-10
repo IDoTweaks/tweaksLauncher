@@ -1,9 +1,13 @@
 import javax.swing.*;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 
@@ -77,6 +81,38 @@ public class programHandler {
             throw new RuntimeException(e);
         }
     }
+
+    public String [] allSteamSaved(){
+        String line;
+        int count = allSavedInt();
+        String [] arr = new String[count];
+        int i = 0;
+        try {
+            BufferedReader reader = Files.newBufferedReader(Path.of("data.json"));
+            {
+                line = reader.readLine();
+                while (line != null) {
+                    if (line.contains("path")) {
+                        String modLine = line.replace("\"","");
+                        modLine = modLine.replace(" ","");
+                        String [] lineSplit = modLine.split(":");
+                        if (lineSplit[1].charAt(0) <= '9' && lineSplit[1].charAt(0) >= '0' ) {
+                            arr[i] = line;
+                            i++;
+                        }
+                    }
+                    line = reader.readLine();
+                }
+
+            }
+            return arr;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
+
     public String [] allSaved() {
         String line;
         int count = allSavedInt();
@@ -115,6 +151,31 @@ public class programHandler {
                         return line.replace("\"", "").trim();
                     }
                     line = reader.readLine();
+                }
+                return line;
+
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    public String findName(String path) {
+        String line;
+        try {
+            BufferedReader reader = Files.newBufferedReader(Path.of("data.json"));
+            BufferedReader reader2 = Files.newBufferedReader(Path.of("data.json"));
+            line = reader.readLine();
+            line = reader.readLine();
+            String line2 = reader2.readLine();
+            {
+                while (line != null) {
+                    if (line.contains(path)) {
+                        String[] parts = line2.split(":");
+                        line = parts[1];
+                        return line.replace("\"", "").replace(" ","").trim();
+                    }
+                    line = reader.readLine();
+                    line2 = reader2.readLine();
                 }
                 return line;
 
@@ -196,8 +257,17 @@ public class programHandler {
     }
 
     public void openProgram(String path) {
-        if (path.contains("com.")){
+        if (path.contains("com.") || path.contains("org.") || path.contains("us.")){
             ProcessBuilder pb = new ProcessBuilder("flatpak","run",path);
+            try {
+                pb.start();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        else if (path.charAt(0) >= '0' && path.charAt(0) <= '9'){
+            System.out.println("steam");
+            ProcessBuilder pb = new ProcessBuilder("steam","-applaunch",path);
             try {
                 pb.start();
             } catch (IOException e) {
@@ -214,5 +284,33 @@ public class programHandler {
             }
         }
     }
-    
+
+    //steam
+    public void addSteamApp() throws IOException {
+        String text = JOptionPane.showInputDialog("enter steam gameid");
+        ProcessBuilder pb = new ProcessBuilder("steam", "-applaunch","<" + text + ">");
+        int save = JOptionPane.showConfirmDialog(null,"wanna save the game?");
+        if (!savedJson(text) && save == JOptionPane.YES_OPTION) {
+            String name = JOptionPane.showInputDialog("enter game name");
+            String json = "{\n" + " \"name\": \"" + name + "\",\n" + " \"path\": \"" + text + "\"\n" + "}" + "\n";
+            Files.writeString(Path.of("data.json"), json, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+            JOptionPane.showMessageDialog(null,"SAVED!");
+            downloadCover(text);
+        }
+        pb.start();
+    }
+
+    public void downloadCover(String appid){
+            String imageUrl = "https://cdn.cloudflare.steamstatic.com/steam/apps/"
+                    + appid + "/header.jpg";
+
+            try (InputStream in = new URL(imageUrl).openStream()) {
+                Files.copy(in, Paths.get(appid + ".png"));
+            } catch (MalformedURLException e) {
+                throw new RuntimeException(e);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+    }
+
 }
