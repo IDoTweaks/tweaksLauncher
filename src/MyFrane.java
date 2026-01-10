@@ -1,83 +1,131 @@
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.IOException;
 
-public class MyFrane extends JFrame implements ActionListener {
+public class MyFrane extends JFrame {
+
     JButton addButton;
-    JPanel appsPanel = new JPanel();
-    private programHandler programHandler = new programHandler();
-    MyFrane() {
-        // Frame setup
-        this.setSize(600, 800);
-        this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        this.getContentPane().setBackground(Color.DARK_GRAY);
-        this.setLayout(new BorderLayout()); // easier for fixed + scrollable buttons
+    JButton removeButton;
+    boolean removeMode = false;
 
-        // Fixed "+" button at the bottom
-        addButton = new JButton("+");
-        addButton.setFont(new Font("Arial", Font.BOLD, 24));
-        addButton.setBackground(Color.GRAY);
-        addButton.setForeground(Color.WHITE);
-        addButton.setFocusPainted(false);
-        addButton.setBorder(BorderFactory.createLineBorder(Color.BLACK, 2));
-        addButton.addActionListener(this);
+    JPanel gridPanel;
+    programHandler programHandler = new programHandler();
 
-        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        bottomPanel.setBackground(Color.DARK_GRAY);
-        bottomPanel.add(addButton);
-        this.add(bottomPanel, BorderLayout.SOUTH);
+    public MyFrane() {
+        // ===== Frame =====
+        setTitle("Launcher");
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+        setExtendedState(JFrame.MAXIMIZED_BOTH); // windowed fullscreen
+        setAlwaysOnTop(false);
+        setFocusable(true);
+        requestFocus();
 
-        // Scrollable panel for dynamic buttons
-        appsPanel.setLayout(new BoxLayout(appsPanel, BoxLayout.Y_AXIS));
-        appsPanel.setBackground(Color.DARK_GRAY);
+        Color bg = new Color(20, 20, 20);
+        getContentPane().setBackground(bg);
 
-        JScrollPane scrollPane = new JScrollPane(appsPanel);
-        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-        this.add(scrollPane, BorderLayout.CENTER);
+        // ===== Header (Heroic-style) =====
+        JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
+        header.setBackground(new Color(30, 30, 30));
 
-        // Initially create buttons from saved programs
+        ImageIcon originalIcon = new ImageIcon("icon.png");
+        Image scaledIcon = originalIcon.getImage().getScaledInstance(40, 40, Image.SCALE_SMOOTH);
+        JLabel icon = new JLabel(new ImageIcon(scaledIcon));
+        icon.setPreferredSize(new Dimension(40, 40));
+
+
+        JLabel title = new JLabel("tweaksLAuncher");
+        title.setForeground(Color.WHITE);
+        title.setFont(new Font("Segoe UI", Font.BOLD, 20));
+
+        header.add(icon);
+        header.add(title);
+        add(header, BorderLayout.NORTH);
+
+        // ===== Grid Panel =====
+        gridPanel = new JPanel(new GridLayout(0, 4, 20, 20));
+        gridPanel.setBackground(bg);
+        gridPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        JScrollPane scrollPane = new JScrollPane(gridPanel);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.setBackground(bg);
+        add(scrollPane, BorderLayout.CENTER);
+
+        // ===== Bottom Controls =====
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 10));
+        bottom.setBackground(bg);
+
+        addButton = createControlButton("+");
+        removeButton = createControlButton("–");
+
+        bottom.add(removeButton);
+        bottom.add(addButton);
+
+        add(bottom, BorderLayout.SOUTH);
+
+        // Load apps
         createAppButtons();
 
-        this.setVisible(true);
+        setVisible(true);
     }
 
-    public void createAppButtons(){
+    // ===== Square App Buttons =====
+    void createAppButtons() {
+        gridPanel.removeAll();
         String[] names = programHandler.allSaved();
-        appsPanel.removeAll(); // clear existing buttons first
 
         for (String name : names) {
-            JButton appButton = new JButton(name);
-            appButton.setBackground(Color.GRAY);
-            appButton.setForeground(Color.WHITE);
-            appButton.setFocusPainted(false);
-            appButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50)); // full width
-            appButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+            JButton app = new JButton("<html><center>" + name + "</center></html>");
+            app.setPreferredSize(new Dimension(180, 180));
+            app.setBackground(new Color(45, 45, 45));
+            app.setForeground(Color.WHITE);
+            app.setFocusPainted(false);
+            app.setBorder(BorderFactory.createLineBorder(new Color(70, 70, 70)));
+            app.setFont(new Font("Segoe UI", Font.BOLD, 14));
 
-            // Optional: add action listener
-            appButton.addActionListener(e -> {
-                String path = programHandler.findPath(name);
-                programHandler.openProgram(path);
+            app.addActionListener(e -> {
+                if (removeMode) {
+                    programHandler.removeProgram(name);
+                    createAppButtons();
+                } else {
+                    programHandler.openProgram(programHandler.findPath(name));
+                }
             });
 
-            appsPanel.add(appButton);
-            appsPanel.add(Box.createRigidArea(new Dimension(0, 5))); // spacing
+            gridPanel.add(app);
         }
 
-        appsPanel.revalidate();
-        appsPanel.repaint();
+        gridPanel.revalidate();
+        gridPanel.repaint();
     }
 
-    @Override
-    public void actionPerformed(ActionEvent e) {
-        if (e.getSource() == addButton){
+    // ===== Control Buttons =====
+    JButton createControlButton(String text) {
+        JButton btn = new JButton(text);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        btn.setBackground(new Color(60, 60, 60));
+        btn.setForeground(Color.WHITE);
+        btn.setFocusPainted(false);
+        btn.setPreferredSize(new Dimension(50, 50));
+
+        btn.addActionListener(this::handleControls);
+        return btn;
+    }
+
+    void handleControls(ActionEvent e) {
+        if (e.getSource() == addButton) {
             try {
                 programHandler.addProgram();
                 createAppButtons();
             } catch (IOException ex) {
-                throw new RuntimeException(ex);
+                ex.printStackTrace();
             }
+        } else if (e.getSource() == removeButton) {
+            removeMode = !removeMode;
+            removeButton.setBackground(removeMode ? new Color(120, 50, 50) : new Color(60, 60, 60));
         }
     }
 }

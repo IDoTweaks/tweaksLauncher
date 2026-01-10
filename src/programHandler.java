@@ -5,6 +5,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.List;
 
 public class programHandler {
 
@@ -144,12 +145,11 @@ public class programHandler {
         }
         System.out.println(line);
         if (line == null) {
-            pb = new ProcessBuilder("find", "/", "-name", name);
+            pb = new ProcessBuilder("bash", "-c", "flatpak list --app | grep -i " + name);
             process = null;
             try {
                 JOptionPane.showMessageDialog(null, "trying to search your whole damn system " +
                         "this will take way too much time JUST WRITE A PATH GNG T_T");
-                System.out.println("trying to search your whole damn system this will take way too much time JUST WRITE A PATH GNG T_T");
                 process = pb.start();
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -158,6 +158,13 @@ public class programHandler {
                     new InputStreamReader(process.getInputStream()));
             try {
                 line = reader.readLine();
+                if (line != null && line.contains("com.")) {
+                    String[] parts = line.trim().split("\\s+");
+                    if (parts.length > 1)
+                        line = parts[1];
+                    else
+                        line = parts[0];
+                }
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -165,13 +172,48 @@ public class programHandler {
         return line;
     }
 
-    public void openProgram(String path) {
-        ProcessBuilder pb = new ProcessBuilder(path).inheritIO();
-        Process process = null;
+    public void removeProgram(String name){
+        List<String> lines = null;
         try {
-            process = pb.start();
+            lines = Files.readAllLines(Path.of("data.json"));
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+
+        for (int i = 0; i < lines.size(); i++) {
+            if (lines.get(i).contains(name)) {
+                int from = Math.max(0, i - 1);
+                int to = Math.min(lines.size(), i + 3);
+                lines.subList(from, to).clear();
+                break;
+            }
+        }
+
+        try {
+            Files.write(Path.of("data.json"), lines);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+    }
+
+    public void openProgram(String path) {
+        if (path.contains("com.")){
+            ProcessBuilder pb = new ProcessBuilder("flatpak","run",path);
+            try {
+                pb.start();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        else {
+            ProcessBuilder pb = new ProcessBuilder(path).inheritIO();
+            Process process = null;
+            try {
+                process = pb.start();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 }
