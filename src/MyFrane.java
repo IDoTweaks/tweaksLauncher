@@ -7,6 +7,7 @@ public class MyFrane extends JFrame {
 
     JButton addButton;
     JButton removeButton;
+    JButton refreshButton;
     boolean removeMode = false;
 
     JPanel gridPanel;
@@ -60,9 +61,11 @@ public class MyFrane extends JFrame {
 
         addButton = createControlButton("+");
         removeButton = createControlButton("–");
+        refreshButton = createControlButton("↻");
 
         bottom.add(removeButton);
         bottom.add(addButton);
+        bottom.add(refreshButton);
 
         add(bottom, BorderLayout.SOUTH);
 
@@ -105,15 +108,15 @@ public class MyFrane extends JFrame {
     // ===== Control Buttons =====
     JButton createControlButton(String text) {
         JButton btn = new JButton(text);
-        btn.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        btn.setFont(new Font("DejaVu Sans", Font.PLAIN, 24));
         btn.setBackground(new Color(60, 60, 60));
         btn.setForeground(Color.WHITE);
         btn.setFocusPainted(false);
-        btn.setPreferredSize(new Dimension(50, 50));
-
+        btn.setPreferredSize(new Dimension(60, 60));
         btn.addActionListener(this::handleControls);
         return btn;
     }
+
 
     void handleControls(ActionEvent e) {
         if (e.getSource() == addButton) {
@@ -126,6 +129,9 @@ public class MyFrane extends JFrame {
         } else if (e.getSource() == removeButton) {
             removeMode = !removeMode;
             removeButton.setBackground(removeMode ? new Color(120, 50, 50) : new Color(60, 60, 60));
+        }
+        else if(e.getSource() == refreshButton){
+            createAppButtons();
         }
     }
 }

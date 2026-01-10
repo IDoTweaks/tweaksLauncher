@@ -148,8 +148,6 @@ public class programHandler {
             pb = new ProcessBuilder("bash", "-c", "flatpak list --app | grep -i " + name);
             process = null;
             try {
-                JOptionPane.showMessageDialog(null, "trying to search your whole damn system " +
-                        "this will take way too much time JUST WRITE A PATH GNG T_T");
                 process = pb.start();
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -216,4 +214,5 @@ public class programHandler {
             }
         }
     }
+    
 }
