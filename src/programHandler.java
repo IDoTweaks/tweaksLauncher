@@ -415,7 +415,7 @@ public class programHandler {
         Process process = pb.start();
         BufferedReader reader = new BufferedReader(
                 new InputStreamReader(process.getInputStream()));
-        String allLine = reader.readAllAsString();
+        String allLine = reader.lines().collect(Collectors.joining("\n"));
         process.waitFor();
         if (allLine != null && allLine.contains("ERROR") && allLine.contains("Login")) {
             pb = new ProcessBuilder("legendary","auth");
