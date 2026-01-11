@@ -60,13 +60,17 @@ public class MyFrane extends JFrame {
 
         JButton mainButton = createSidebarButton("Main");
         JButton steamButton = createSidebarButton("Steam");
+        JButton epicButton = createSidebarButton("Epic");
 
-        mainButton.addActionListener(e -> switchMode("main", mainButton, steamButton));
-        steamButton.addActionListener(e -> switchMode("steam", mainButton, steamButton));
+        mainButton.addActionListener(e -> switchMode("main", mainButton, steamButton, epicButton));
+        steamButton.addActionListener(e -> switchMode("steam", mainButton, steamButton, epicButton));
+        epicButton.addActionListener(e -> switchMode("epic", mainButton, steamButton, epicButton));
 
         sidebar.add(mainButton);
         sidebar.add(Box.createRigidArea(new Dimension(0, 10)));
         sidebar.add(steamButton);
+        sidebar.add(Box.createRigidArea(new Dimension(0, 10)));
+        sidebar.add(epicButton);
         sidebar.add(Box.createVerticalGlue());
 
         add(sidebar, BorderLayout.WEST);
@@ -117,18 +121,24 @@ public class MyFrane extends JFrame {
     }
 
     // ===== Switch Mode =====
-    void switchMode(String mode, JButton mainBtn, JButton steamBtn) {
+    void switchMode(String mode, JButton mainBtn, JButton steamBtn, JButton epicBtn) {
         currentMode = mode;
 
-        // Update button colors
+        // Reset all buttons to default color
+        mainBtn.setBackground(new Color(45, 45, 45));
+        steamBtn.setBackground(new Color(45, 45, 45));
+        epicBtn.setBackground(new Color(45, 45, 45));
+
+        // Update button colors and load appropriate view
         if (mode.equals("main")) {
             mainBtn.setBackground(new Color(70, 120, 180));
-            steamBtn.setBackground(new Color(45, 45, 45));
             createAppButtons();
-        } else {
-            mainBtn.setBackground(new Color(45, 45, 45));
+        } else if (mode.equals("steam")) {
             steamBtn.setBackground(new Color(70, 120, 180));
             createSteamButtons();
+        } else if (mode.equals("epic")) {
+            epicBtn.setBackground(new Color(70, 120, 180));
+            createEpicButtons();
         }
     }
 
@@ -138,7 +148,9 @@ public class MyFrane extends JFrame {
         String[] names = programHandler.allSaved();
 
         for (String name : names) {
-            if (!(programHandler.findPath(name).charAt(0) <= '9' && programHandler.findPath(name).charAt(0) >= '0')) {
+            String path = programHandler.findPath(name);
+            // Filter out Steam games (start with digit) and Epic games (start with 'e:')
+            if (!((path.charAt(0) <= '9' && path.charAt(0) >= '0') || path.startsWith("e:"))) {
                 JButton app = new JButton("<html><center>" + name + "</center></html>");
                 app.setPreferredSize(new Dimension(180, 180));
                 app.setBackground(new Color(45, 45, 45));
@@ -198,6 +210,41 @@ public class MyFrane extends JFrame {
 
         gridPanel.revalidate();
         gridPanel.repaint();
+    }
+
+    // ===== Epic Games Buttons (Epic Mode) =====
+    void createEpicButtons() {
+        gridPanel.removeAll();
+        String[] names = programHandler.allSaved();
+
+        for (String name : names) {
+            String path = programHandler.findPath(name);
+            if (path.contains("aUniquePathForLegendaryGames")) {
+                EpicGamePanel gamePanel = getEpicGamePanel(name);
+                gridPanel.add(gamePanel);
+            }
+        }
+
+        gridPanel.revalidate();
+        gridPanel.repaint();
+    }
+
+    private EpicGamePanel getEpicGamePanel(String name) {
+        EpicGamePanel gamePanel = new EpicGamePanel(name);
+        gamePanel.setPreferredSize(new Dimension(180, 180));
+
+        gamePanel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (removeMode) {
+                    programHandler.removeProgram(name);
+                    createEpicButtons();
+                } else {
+                    programHandler.openProgram(programHandler.findPath(name));
+                }
+            }
+        });
+        return gamePanel;
     }
 
     // ===== Custom Panel for Steam Games with Hover Effect =====
@@ -302,6 +349,98 @@ public class MyFrane extends JFrame {
         }
     }
 
+    // ===== Custom Panel for Epic Games with Hover Effect =====
+    class EpicGamePanel extends JPanel {
+        private String gameName;
+        private BufferedImage coverImage;
+        private boolean isHovered = false;
+
+        public EpicGamePanel(String gameName) {
+            this.gameName = gameName;
+            setLayout(null);
+            setBorder(BorderFactory.createLineBorder(new Color(70, 70, 70)));
+
+            // Add hover listener
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    isHovered = true;
+                    repaint();
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    isHovered = false;
+                    repaint();
+                }
+            });
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2d = (Graphics2D) g;
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+
+            int w = getWidth();
+            int h = getHeight();
+
+            // Draw cover image or fallback background
+            if (coverImage != null) {
+                g2d.drawImage(coverImage, 0, 0, w, h, null);
+            } else {
+                g2d.setColor(new Color(45, 45, 45));
+                g2d.fillRect(0, 0, w, h);
+            }
+
+            // Draw hover effect with blurred gradient and text
+            if (isHovered) {
+                // Create gradient overlay from bottom
+                int gradientHeight = 80;
+                GradientPaint gradient = new GradientPaint(
+                        0, h - gradientHeight, new Color(0, 0, 0, 200),
+                        0, h - gradientHeight + 40, new Color(0, 0, 0, 100)
+                );
+                g2d.setPaint(gradient);
+                g2d.fillRect(0, h - gradientHeight, w, gradientHeight);
+
+                // Draw game name
+                g2d.setColor(Color.WHITE);
+                g2d.setFont(new Font("Segoe UI", Font.BOLD, 14));
+                FontMetrics fm = g2d.getFontMetrics();
+
+                // Word wrap the text if needed
+                String[] words = gameName.split(" ");
+                StringBuilder line = new StringBuilder();
+                int y = h - 25;
+
+                for (String word : words) {
+                    String testLine = line.length() == 0 ? word : line + " " + word;
+                    if (fm.stringWidth(testLine) > w - 20) {
+                        if (line.length() > 0) {
+                            int x = (w - fm.stringWidth(line.toString())) / 2;
+                            g2d.drawString(line.toString(), x, y);
+                            y += fm.getHeight();
+                            line = new StringBuilder(word);
+                        } else {
+                            int x = (w - fm.stringWidth(word)) / 2;
+                            g2d.drawString(word, x, y);
+                            y += fm.getHeight();
+                        }
+                    } else {
+                        line = new StringBuilder(testLine);
+                    }
+                }
+
+                if (line.length() > 0) {
+                    int x = (w - fm.stringWidth(line.toString())) / 2;
+                    g2d.drawString(line.toString(), x, y);
+                }
+            }
+        }
+    }
+
     // ===== Control Buttons =====
     JButton createControlButton(String text) {
         JButton btn = new JButton(text);
@@ -321,8 +460,37 @@ public class MyFrane extends JFrame {
                     programHandler.addProgram();
                     createAppButtons();
                 } else if(currentMode.equals("steam")) {
-                    programHandler.addSteamApp();
+                    int save = JOptionPane.showConfirmDialog(null,"would you like to add steam games automatically");
+                    if (save == JOptionPane.YES_OPTION) {
+                        try {
+                            programHandler.addSteamGames();
+                            createAppButtons();
+                        } catch (Exception ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    }
+                    else {
+                        save = JOptionPane.showConfirmDialog(null,"would you like to add steam games manually?");
+                        if (save == JOptionPane.YES_OPTION) {
+                            try {
+                                programHandler.addSteamApp();
+                                createAppButtons();
+                            } catch (Exception ex) {
+                                throw new RuntimeException(ex);
+                            }
+                        }
+                    }
                     createSteamButtons();
+                } else if(currentMode.equals("epic")) {
+                    int save = JOptionPane.showConfirmDialog(null,"would you like to add epic games automatically?");
+                    if (save == JOptionPane.YES_OPTION) {
+                        try {
+                            programHandler.allLegendaryGames();
+                        } catch (Exception ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    }
+                    createEpicButtons();
                 }
             } catch (IOException ex) {
                 ex.printStackTrace();
@@ -333,8 +501,10 @@ public class MyFrane extends JFrame {
         } else if (e.getSource() == refreshButton) {
             if (currentMode.equals("main")) {
                 createAppButtons();
-            } else {
+            } else if (currentMode.equals("steam")) {
                 createSteamButtons();
+            } else if (currentMode.equals("epic")) {
+                createEpicButtons();
             }
         }
     }

@@ -1,15 +1,17 @@
 import javax.swing.*;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
+import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.ProtocolException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 public class programHandler {
 
@@ -257,35 +259,72 @@ public class programHandler {
     }
 
     public void openProgram(String path) {
-        if (path.contains("com.") || path.contains("org.") || path.contains("us.")){
-            ProcessBuilder pb = new ProcessBuilder("flatpak","run",path);
+        new Thread(() -> {
             try {
-                pb.start();
+                if (path.contains("com.") || path.contains("org.") || path.contains("us.")) {
+                    new ProcessBuilder("flatpak", "run", path).start();
+                }
+                else if (path.charAt(0) >= '0' && path.charAt(0) <= '9') {
+                    System.out.println("steam");
+                    new ProcessBuilder("steam", "-applaunch", path).start();
+                }
+                else if (path.contains("aUniquePathForLegendaryGames")) {
+                    System.out.println("detected");
+                    String gamePath = path.replace("aUniquePathForLegendaryGames", "");
+
+                    ProcessBuilder pb = new ProcessBuilder("legendary", "launch", gamePath);
+                    pb.redirectErrorStream(true);
+                    Process process = pb.start();
+
+                    boolean finished = process.waitFor(3, TimeUnit.SECONDS);
+                    if (finished) {
+                        try (BufferedReader reader = new BufferedReader(
+                                new InputStreamReader(process.getInputStream()))) {
+                            String output = reader.lines().collect(Collectors.joining("\n"));
+
+                            System.out.println("Output: " + output);
+
+                            if (output.contains("ERROR") && output.contains("not") && output.contains("installed")) {
+                                SwingUtilities.invokeLater(() ->
+                                        JOptionPane.showMessageDialog(null,
+                                                "Installing/updating/repairing game. please wait until confirmation appears"));
+
+                                ProcessBuilder installPb = new ProcessBuilder("legendary", "install", gamePath, "--yes");
+                                installPb.inheritIO();
+                                process = installPb.start();
+                                process.waitFor();
+
+                                SwingUtilities.invokeLater(() ->
+                                        JOptionPane.showMessageDialog(null, "Installed!"));
+                            }
+                        }
+                    } else {
+                        process.destroy();
+                        System.out.println("timed out");
+                    }
+                }
+                else {
+                    new ProcessBuilder(path).inheritIO().start();
+                }
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                e.printStackTrace();
+                SwingUtilities.invokeLater(() ->
+                        JOptionPane.showMessageDialog(null,
+                                "Error launching: " + e.getMessage(),
+                                "Error",
+                                JOptionPane.ERROR_MESSAGE));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                e.printStackTrace();
+                SwingUtilities.invokeLater(() ->
+                        JOptionPane.showMessageDialog(null,
+                                "Launch interrupted",
+                                "Error",
+                                JOptionPane.ERROR_MESSAGE));
             }
-        }
-        else if (path.charAt(0) >= '0' && path.charAt(0) <= '9'){
-            System.out.println("steam");
-            ProcessBuilder pb = new ProcessBuilder("steam","-applaunch",path);
-            try {
-                pb.start();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }
-        else {
-            ProcessBuilder pb = new ProcessBuilder(path).inheritIO();
-            Process process = null;
-            try {
-                process = pb.start();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }
+        }).start();
     }
 
-    //steam
     public void addSteamApp() throws IOException {
         String text = JOptionPane.showInputDialog("enter steam gameid");
         ProcessBuilder pb = new ProcessBuilder("steam", "-applaunch","<" + text + ">");
@@ -300,17 +339,122 @@ public class programHandler {
         pb.start();
     }
 
-    public void downloadCover(String appid){
-            String imageUrl = "https://cdn.cloudflare.steamstatic.com/steam/apps/"
-                    + appid + "/header.jpg";
 
-            try (InputStream in = new URL(imageUrl).openStream()) {
-                Files.copy(in, Paths.get(appid + ".png"));
-            } catch (MalformedURLException e) {
-                throw new RuntimeException(e);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+    public void downloadCover(String appid) throws IOException {
+        String imageUrl = "https://cdn.cloudflare.steamstatic.com/steam/apps/"
+                + appid + "/header.jpg";
+        HttpURLConnection conn = (HttpURLConnection) new URL(imageUrl).openConnection();
+        conn.setRequestMethod("GET");
+        conn.connect();
+
+        int code = conn.getResponseCode();
+        if (code != 200) {
+            return;
+        }
+
+        try (InputStream in = new URL(imageUrl).openStream()) {
+            Files.copy(in, Paths.get(appid + ".png"));
+        } catch (MalformedURLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public String[] getSteamGames(String apiKey, String steamId) throws Exception {
+
+        String urlStr = "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"
+                + "?key=" + apiKey
+                + "&steamid=" + steamId
+                + "&include_appinfo=0"
+                + "&include_played_free_games=1";
+
+        URL url = new URL(urlStr);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("GET");
+        BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+        StringBuilder response = new StringBuilder();
+        String line;
+        while ((line = in.readLine()) != null) {
+            response.append(line);
+        }
+        String json = response.toString();
+        ArrayList<String> appIds = new ArrayList<>();
+        int index = 0;
+        while ((index = json.indexOf("\"appid\":", index)) != -1) {
+            index += 8;
+            int end = json.indexOf(",", index);
+            String appId = json.substring(index, end).trim();
+            appIds.add(appId);
+        }
+
+        return appIds.toArray(new String[0]);
+    }
+
+    public void addSteamGames() throws Exception {
+        String apiKey = JOptionPane.showInputDialog("enter steam api key");
+        String steamId = JOptionPane.showInputDialog("enter steam id");
+        String [] appids = getSteamGames(apiKey,steamId);
+        int i;
+        for (i =0;i < appids.length;i++) {
+            String jsun = new String(new java.net.URL(
+                    "https://store.steampowered.com/api/appdetails?appids=" + appids[i]
+            ).openStream().readAllBytes());
+            String name = jsun.split("\"name\":\"")[1].split("\"")[0];
+            if (!savedJson(appids[i])) {
+                String json = "{\n" + " \"name\": \"" + name + "\",\n" + " \"path\": \"" + appids[i] + "\"\n" + "}" + "\n";
+                Files.writeString(Path.of("data.json"), json, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+                downloadCover(appids[i]);
             }
+        }
+        JOptionPane.showMessageDialog(null, "SAVED: " + i + " games");
+    }
+
+
+
+    public void allLegendaryGames() throws IOException, InterruptedException {
+        ProcessBuilder pb = new ProcessBuilder("legendary", "list");
+        Process process = pb.start();
+        BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream()));
+        String allLine = reader.readAllAsString();
+        process.waitFor();
+        if (allLine != null && allLine.contains("ERROR") && allLine.contains("Login")) {
+            pb = new ProcessBuilder("legendary","auth");
+            pb.redirectErrorStream(true);
+            process = pb.start();
+            OutputStream stdin = process.getOutputStream();
+            String auth = JOptionPane.showInputDialog("enter auth");
+            stdin.write((auth + "\n").getBytes());
+            stdin.flush();
+            stdin.close();
+            process.waitFor();
+        }
+        else if (allLine != null) {
+            System.out.println("1");
+            process = pb.start();
+            reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()));
+            System.out.println("2");
+            String line = reader.readLine();
+            System.out.println("3");
+            while (line != null){
+                System.out.println("4");
+                if (line.contains("*")){
+                    System.out.println("contains *");
+                    String [] filter = line.replace("*","").replace(" ","").split("\\(");
+                    String name = filter[0];
+                    filter = filter[1].split(":");
+                    filter = filter[1].split("\\|");
+                    String path = filter[0].replace(" ","");
+                    if (!savedJson(name)) {
+                        String json = "{\n" + " \"name\": \"" + name + "\",\n" + " \"path\": \"" + "aUniquePathForLegendaryGames" + path + "\"\n" + "}" + "\n";
+                        Files.writeString(Path.of("data.json"), json, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+                    }
+                }
+                else
+                    System.out.println("!contains *");
+                line = reader.readLine();
+            }
+        }
     }
 
 }
