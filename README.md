@@ -67,6 +67,9 @@ added a remove program function + a remove mode
 when built and ran it opens app as themselves and not as my app
 i asked chatgpt to make the ui cooler literly that and it broke some things but it was easy to fix
 
+# UPDATE 3
+added steam support + legendary support and more but im lazy writing ts
+
 # things i plan to add
 option to edit the places of the apps which will just mean i copy 2 chunks of the json save 1 as temp and just switch places which i hope is easy
 option to add icons to apps which just means in the json file i need to add a path to the icon
