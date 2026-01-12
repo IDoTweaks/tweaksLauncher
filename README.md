@@ -3,11 +3,17 @@ this is my first publicly available project its meant for linux users and its a 
 
 # HOW TO RUN
 you will need to build it in the following way:
-open a terminal in the project root and run this:javac -d out src/*.java
+open a terminal in the project root and run this:
 
-then to create the jar run: jar cfm tweaksLauncher.jar manifest.txt -C out/ .
+javac -d out src/*.java
 
-and to run it: java -jar tweaksLauncher.jar
+then to create the jar run: 
+
+jar cfm tweaksLauncher.jar manifest.txt -C out/ .
+
+and to run it: 
+
+java -jar tweaksLauncher.jar
 
 
 
