@@ -261,51 +261,30 @@ public class programHandler {
     public void openProgram(String path) {
         new Thread(() -> {
             try {
+                ProcessBuilder pb;
+
                 if (path.contains("com.") || path.contains("org.") || path.contains("us.")) {
-                    new ProcessBuilder("flatpak", "run", path).start();
-                }
-                else if (path.charAt(0) >= '0' && path.charAt(0) <= '9') {
-                    System.out.println("steam");
-                    new ProcessBuilder("steam", "-applaunch", path).start();
-                }
-                else if (path.contains("aUniquePathForLegendaryGames")) {
-                    System.out.println("detected");
+                    pb = new ProcessBuilder("flatpak", "run", path);
+
+                } else if (path.charAt(0) >= '0' && path.charAt(0) <= '9') {
+                    // Steam apps
+                    pb = new ProcessBuilder("steam", "-applaunch", path);
+
+                } else if (path.contains("aUniquePathForLegendaryGames")) {
+                    // Legendary games
                     String gamePath = path.replace("aUniquePathForLegendaryGames", "");
-
-                    ProcessBuilder pb = new ProcessBuilder("legendary", "launch", gamePath);
-                    pb.redirectErrorStream(true);
-                    Process process = pb.start();
-
-                    boolean finished = process.waitFor(3, TimeUnit.SECONDS);
-                    if (finished) {
-                        try (BufferedReader reader = new BufferedReader(
-                                new InputStreamReader(process.getInputStream()))) {
-                            String output = reader.lines().collect(Collectors.joining("\n"));
-
-                            System.out.println("Output: " + output);
-
-                            if (output.contains("ERROR") && output.contains("not") && output.contains("installed")) {
-                                SwingUtilities.invokeLater(() ->
-                                        JOptionPane.showMessageDialog(null,
-                                                "Installing/updating/repairing game. please wait until confirmation appears"));
-
-                                ProcessBuilder installPb = new ProcessBuilder("legendary", "install", gamePath, "--yes");
-                                installPb.inheritIO();
-                                process = installPb.start();
-                                process.waitFor();
-
-                                SwingUtilities.invokeLater(() ->
-                                        JOptionPane.showMessageDialog(null, "Installed!"));
-                            }
-                        }
-                    } else {
-                        process.destroy();
-                        System.out.println("timed out");
-                    }
+                    launchLegendaryWithProtonGE(gamePath);
+                    return;
+                } else {
+                    pb = new ProcessBuilder(path);
                 }
-                else {
-                    new ProcessBuilder(path).inheritIO().start();
+                if (pb != null) {
+                    pb.redirectInput(ProcessBuilder.Redirect.DISCARD);
+                    pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+                    pb.redirectError(ProcessBuilder.Redirect.DISCARD);
+                    pb.start();
                 }
+
             } catch (IOException e) {
                 e.printStackTrace();
                 SwingUtilities.invokeLater(() ->
@@ -313,17 +292,11 @@ public class programHandler {
                                 "Error launching: " + e.getMessage(),
                                 "Error",
                                 JOptionPane.ERROR_MESSAGE));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                e.printStackTrace();
-                SwingUtilities.invokeLater(() ->
-                        JOptionPane.showMessageDialog(null,
-                                "Launch interrupted",
-                                "Error",
-                                JOptionPane.ERROR_MESSAGE));
             }
         }).start();
     }
+
+
 
     public void addSteamApp() throws IOException {
         String text = JOptionPane.showInputDialog("enter steam gameid");
@@ -456,5 +429,108 @@ public class programHandler {
             }
         }
     }
+    //proton cause legendary wont detect controller
+    public String getProtonGEPath() {
+        String home = System.getProperty("user.home");
+        Path base = Paths.get(home, ".local", "share", "ProtonGE");
+        if (Files.exists(base)) {
+            try {
+                return Files.list(base)
+                        .filter(Files::isDirectory)
+                        .map(Path::toString)
+                        .findFirst()
+                        .orElse(null);
+            } catch (IOException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    public void installProtonGE() {
+        String home = System.getProperty("user.home");
+        Path base = Paths.get(home, ".local", "share", "ProtonGE");
+        try {
+            Files.createDirectories(base);
+            ProcessBuilder pb = new ProcessBuilder("bash", "-c",
+                    "curl -s https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest " +
+                            "| grep browser_download_url " +
+                            "| grep tar.gz " +
+                            "| cut -d '\"' -f 4");
+            Process p = pb.start();
+            BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            String url = r.readLine();
+            if (url == null) return;
+            p.waitFor();
+
+            String file = base.resolve("proton-ge.tar.gz").toString();
+            new ProcessBuilder("bash", "-c", "wget -O \"" + file + "\" \"" + url + "\"").inheritIO().start().waitFor();
+            new ProcessBuilder("bash", "-c", "tar -xf \"" + file + "\" -C \"" + base + "\"").inheritIO().start().waitFor();
+            Files.deleteIfExists(Paths.get(file));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public String ensureProtonGE() {
+        String path = getProtonGEPath();
+        if (path == null) {
+            installProtonGE();
+            path = getProtonGEPath();
+        }
+        return path;
+    }
+
+    public void launchLegendaryWithProtonGE(String game) {
+        new Thread(() -> {
+            try {
+                String ge = ensureProtonGE();
+                if (ge == null) {
+                    SwingUtilities.invokeLater(() ->
+                            JOptionPane.showMessageDialog(null, "Failed to get Proton-GE"));
+                    return;
+                }
+
+                String home = System.getProperty("user.home");
+                String compatDataPath = home + "/.local/share/legendary/compatdata/" + game;
+                Files.createDirectories(Paths.get(compatDataPath));
+                String wrapperPath = home + "/.local/share/legendary/proton_wrapper.sh";
+                String wrapperContent = "#!/bin/bash\n" +
+                        "export STEAM_COMPAT_DATA_PATH=\"" + compatDataPath + "\"\n" +
+                        "export STEAM_COMPAT_CLIENT_INSTALL_PATH=\"$HOME/.local/share/Steam\"\n" +
+                        "exec \"" + ge + "/proton\" run \"$@\"\n";
+
+                Files.writeString(Paths.get(wrapperPath), wrapperContent);
+                new ProcessBuilder("chmod", "+x", wrapperPath).start().waitFor();
+
+                ProcessBuilder pb = new ProcessBuilder(
+                        "legendary", "launch", game,
+                        "--wine", wrapperPath
+                );
+
+                pb.environment().put("STEAM_COMPAT_DATA_PATH", compatDataPath);
+                pb.environment().put("WINEDLLOVERRIDES", "xinput1_3=n,b");
+                pb.environment().put("PROTON_LOG", "1");
+                pb.redirectErrorStream(true);
+                Process p = pb.start();
+
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(p.getInputStream()));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    System.out.println(line);
+                }
+
+                int exitCode = p.waitFor();
+                System.out.println("exited with code: " + exitCode);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                SwingUtilities.invokeLater(() ->
+                        JOptionPane.showMessageDialog(null, "error: " + e.getMessage()));
+            }
+        }).start();
+    }
+
 
 }
