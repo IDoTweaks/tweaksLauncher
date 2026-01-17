@@ -13,8 +13,9 @@ import java.util.Random;
 public class MyFrane extends JFrame {
 
     JButton addButton, removeButton, refreshButton;
+    JButton steamStoreBtn, steamMarketBtn, epicStoreBtn;
     boolean removeMode = false;
-    JPanel gridPanel, bottomPanel;
+    JPanel gridPanel, bottomPanel, headerPanel;
     programHandler programHandler = new programHandler();
     String currentMode = "main";
 
@@ -70,13 +71,55 @@ public class MyFrane extends JFrame {
         setContentPane(mainContent);
 
         // Header
-        JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 25, 20));
-        header.setOpaque(false);
+        headerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 25, 20));
+        headerPanel.setOpaque(false);
         JLabel title = new JLabel("tweaksLauncher");
         title.setForeground(STAR_WHITE);
         title.setFont(new Font("Segoe UI", Font.BOLD, 28));
-        header.add(title);
-        add(header, BorderLayout.NORTH);
+        headerPanel.add(title);
+
+        // Search bar
+        JTextField searchField = new JTextField(20);
+        searchField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        searchField.setBackground(new Color(40, 40, 80, 150));
+        searchField.setForeground(STAR_WHITE);
+        searchField.setCaretColor(STAR_WHITE);
+        searchField.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(NEBULA_PURPLE, 1),
+                BorderFactory.createEmptyBorder(8, 12, 8, 12)
+        ));
+        searchField.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyReleased(KeyEvent e) {
+                String searchText = searchField.getText().toLowerCase();
+                if (searchText.isEmpty()) {
+                    if (currentMode.equals("main")) createAppButtons();
+                    else if (currentMode.equals("steam")) createSteamButtons();
+                    else if (currentMode.equals("epic")) createEpicButtons();
+                } else {
+                    if (currentMode.equals("main")) createAppSearchButtons(searchText);
+                    else if (currentMode.equals("steam")) createSteamSearchButtons(searchText);
+                    else if (currentMode.equals("epic")) createEpicSearchButtons(searchText);
+                }
+            }
+        });
+        headerPanel.add(searchField);
+        steamStoreBtn = createHeaderButton("Store");
+        steamStoreBtn.addActionListener(e -> openURL("https://store.steampowered.com"));
+        steamStoreBtn.setVisible(false);
+        headerPanel.add(steamStoreBtn);
+
+        steamMarketBtn = createHeaderButton("Market");
+        steamMarketBtn.addActionListener(e -> openURL("https://steamcommunity.com/market"));
+        steamMarketBtn.setVisible(false);
+        headerPanel.add(steamMarketBtn);
+
+        epicStoreBtn = createHeaderButton("Store");
+        epicStoreBtn.addActionListener(e -> openURL("https://store.epicgames.com"));
+        epicStoreBtn.setVisible(false);
+        headerPanel.add(epicStoreBtn);
+
+        add(headerPanel, BorderLayout.NORTH);
 
         // Sidebar
         JPanel sidebar = new JPanel();
@@ -147,6 +190,18 @@ public class MyFrane extends JFrame {
         UIManager.put("Button.foreground", Color.WHITE);
     }
 
+    JButton createHeaderButton(String text) {
+        JButton btn = new JButton(text);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btn.setBackground(NEBULA_PURPLE);
+        btn.setForeground(STAR_WHITE);
+        btn.setFocusPainted(false);
+        btn.setPreferredSize(new Dimension(90, 40));
+        btn.setBorder(BorderFactory.createLineBorder(new Color(150, 120, 255), 1));
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return btn;
+    }
+
     JButton createSidebarButton(String text) {
         JButton btn = new JButton(text);
         btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
@@ -172,16 +227,44 @@ public class MyFrane extends JFrame {
     void switchMode(String mode, JButton m, JButton s, JButton e) {
         currentMode = mode;
         m.setBackground(GLASS_BG); s.setBackground(GLASS_BG); e.setBackground(GLASS_BG);
-        if (mode.equals("main")) { m.setBackground(NEBULA_PURPLE); createAppButtons(); }
-        else if (mode.equals("steam")) { s.setBackground(NEBULA_PURPLE); createSteamButtons(); }
-        else if (mode.equals("epic")) { e.setBackground(NEBULA_PURPLE); createEpicButtons(); }
+        steamStoreBtn.setVisible(false);
+        steamMarketBtn.setVisible(false);
+        epicStoreBtn.setVisible(false);
+
+        if (mode.equals("main")) {
+            m.setBackground(NEBULA_PURPLE);
+            createAppButtons();
+        }
+        else if (mode.equals("steam")) {
+            s.setBackground(NEBULA_PURPLE);
+            steamStoreBtn.setVisible(true);
+            steamMarketBtn.setVisible(true);
+            createSteamButtons();
+        }
+        else if (mode.equals("epic")) {
+            e.setBackground(NEBULA_PURPLE);
+            epicStoreBtn.setVisible(true);
+            createEpicButtons();
+        }
+
+        headerPanel.revalidate();
+        headerPanel.repaint();
+    }
+
+    void openURL(String url) {
+        try {
+            Desktop.getDesktop().browse(new java.net.URI(url));
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Could not open browser: " + ex.getMessage());
+        }
     }
 
     void createAppButtons() {
         gridPanel.removeAll();
         for (String name : programHandler.allSaved()) {
             String path = programHandler.findPath(name);
-            if (!((path.charAt(0) <= '9' && path.charAt(0) >= '0') || path.startsWith("e:"))) {
+            if (!((path.charAt(0) <= '9' && path.charAt(0) >= '0') || path.startsWith("e:") || path.contains("aUniquePathForLegendaryGames"))) {
                 JButton app = new JButton("<html><center>" + name + "</center></html>");
                 app.setPreferredSize(new Dimension(200, 200));
                 app.setBackground(new Color(40, 40, 80, 120));
@@ -198,11 +281,52 @@ public class MyFrane extends JFrame {
         gridPanel.revalidate(); gridPanel.repaint();
     }
 
+    void createAppSearchButtons(String text) {
+        gridPanel.removeAll();
+        for (String name : programHandler.allSaved()) {
+            String path = programHandler.findPath(name);
+            if (name.toLowerCase().contains(text.toLowerCase())&&!((path.charAt(0) <= '9' && path.charAt(0) >= '0') || path.startsWith("e:") || path.contains("aUniquePathForLegendaryGames"))) {
+                JButton app = new JButton("<html><center>" + name + "</center></html>");
+                app.setPreferredSize(new Dimension(200, 200));
+                app.setBackground(new Color(40, 40, 80, 120));
+                app.setForeground(Color.WHITE);
+                app.setBorder(BorderFactory.createLineBorder(NEBULA_PURPLE));
+                app.setFocusPainted(false);
+                app.addActionListener(e -> {
+                    if (removeMode) { programHandler.removeProgram(name); createAppButtons(); }
+                    else programHandler.openProgram(path);
+                });
+                gridPanel.add(app);
+            }
+        }
+        gridPanel.revalidate(); gridPanel.repaint();
+    }
+
+
     void createSteamButtons() {
         gridPanel.removeAll();
         for (String name : programHandler.allSaved()) {
             String path = programHandler.findPath(name);
             if (path.charAt(0) <= '9' && path.charAt(0) >= '0') {
+                SteamGamePanel p = new SteamGamePanel(name, path.split(":")[0] + ".png");
+                p.addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mousePressed(MouseEvent e) {
+                        if (removeMode) { programHandler.removeProgram(name); createSteamButtons(); }
+                        else programHandler.openProgram(path);
+                    }
+                });
+                gridPanel.add(p);
+            }
+        }
+        gridPanel.revalidate(); gridPanel.repaint();
+    }
+
+    void createSteamSearchButtons(String text) {
+        gridPanel.removeAll();
+        for (String name : programHandler.allSaved()) {
+            String path = programHandler.findPath(name);
+            if (path.charAt(0) <= '9' && path.charAt(0) >= '0' && name.toLowerCase().contains(text.toLowerCase())) {
                 SteamGamePanel p = new SteamGamePanel(name, path.split(":")[0] + ".png");
                 p.addMouseListener(new MouseAdapter() {
                     @Override
@@ -236,11 +360,30 @@ public class MyFrane extends JFrame {
         gridPanel.revalidate(); gridPanel.repaint();
     }
 
+    void createEpicSearchButtons(String text){
+        gridPanel.removeAll();
+        for (String name : programHandler.allSaved()) {
+            String path = programHandler.findPath(name);
+            if (path.contains("aUniquePathForLegendaryGames") && name.toLowerCase().contains(text.toLowerCase())) {
+                EpicGamePanel p = new EpicGamePanel(name);
+                p.addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mousePressed(MouseEvent e) {
+                        if (removeMode) { programHandler.removeProgram(name); createEpicButtons(); }
+                        else programHandler.openProgram(path);
+                    }
+                });
+                gridPanel.add(p);
+            }
+        }
+        gridPanel.revalidate(); gridPanel.repaint();
+    }
+
     class SteamGamePanel extends JPanel {
         private String name; private BufferedImage img; private boolean hover = false;
         public SteamGamePanel(String n, String path) {
             this.name = n; setOpaque(false);
-            setPreferredSize(new Dimension(200, 200)); // Set fixed size
+            setPreferredSize(new Dimension(200, 200));
             try {
                 File f = new File(path);
                 if(f.exists()) {
@@ -297,6 +440,7 @@ public class MyFrane extends JFrame {
             if (e.getSource() == addButton) {
                 if (currentMode.equals("main")) { programHandler.addProgram(); createAppButtons(); }
                 else if (currentMode.equals("steam")) {
+
                     int choice = JOptionPane.showConfirmDialog(this, "Auto-import Steam games?");
                     if (choice == JOptionPane.YES_OPTION) programHandler.addSteamGames();
                     createSteamButtons();

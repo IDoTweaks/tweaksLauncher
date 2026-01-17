@@ -1,8 +1,7 @@
 import javax.swing.*;
+import java.awt.*;
 import java.io.*;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.ProtocolException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,7 +14,14 @@ import java.util.stream.Collectors;
 
 public class programHandler {
 
+    private SystemMonitor monitor;
+    private JFrame parentFrame;
+
     public programHandler() {
+    }
+
+    public void setParentFrame(JFrame frame) {
+        this.parentFrame = frame;
     }
 
     public void addProgram() throws IOException {
@@ -38,7 +44,6 @@ public class programHandler {
                     JOptionPane.showMessageDialog(null,"SAVED!");
                 }
                 openProgram(path);
-
             }
         }
     }
@@ -56,7 +61,6 @@ public class programHandler {
                     line = reader.readLine();
                 }
                 return false;
-
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -76,7 +80,6 @@ public class programHandler {
                     }
                     line = reader.readLine();
                 }
-
             }
             return count;
         } catch (IOException e) {
@@ -105,15 +108,12 @@ public class programHandler {
                     }
                     line = reader.readLine();
                 }
-
             }
             return arr;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
-
-
 
     public String [] allSaved() {
         String line;
@@ -131,7 +131,6 @@ public class programHandler {
                     }
                     line = reader.readLine();
                 }
-
             }
             return arr;
         } catch (IOException e) {
@@ -155,12 +154,12 @@ public class programHandler {
                     line = reader.readLine();
                 }
                 return line;
-
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
+
     public String findName(String path) {
         String line;
         try {
@@ -180,7 +179,6 @@ public class programHandler {
                     line2 = reader2.readLine();
                 }
                 return line;
-
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -255,52 +253,71 @@ public class programHandler {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
     }
 
     public void openProgram(String path) {
+        // Show monitor option
+        int showMonitor = JOptionPane.showConfirmDialog(null,
+                "Show performance monitor?",
+                "Monitor",
+                JOptionPane.YES_NO_OPTION);
+
+        if (showMonitor == JOptionPane.YES_OPTION && monitor == null) {
+            monitor = new SystemMonitor();
+        }
+
         new Thread(() -> {
-            try {
-                ProcessBuilder pb;
+            ProcessBuilder pb = null;
 
-                if (path.contains("com.") || path.contains("org.") || path.contains("us.")) {
-                    pb = new ProcessBuilder("flatpak", "run", path);
-
-                } else if (path.charAt(0) >= '0' && path.charAt(0) <= '9') {
-                    // Steam apps
-                    pb = new ProcessBuilder("steam", "-applaunch", path);
-
-                } else if (path.contains("aUniquePathForLegendaryGames")) {
-                    // Legendary games
-                    String gamePath = path.replace("aUniquePathForLegendaryGames", "");
-                    launchLegendaryWithProtonGE(gamePath);
-                    return;
-                } else {
-                    pb = new ProcessBuilder(path);
-                }
-                if (pb != null) {
-                    pb.redirectInput(ProcessBuilder.Redirect.DISCARD);
-                    pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
-                    pb.redirectError(ProcessBuilder.Redirect.DISCARD);
-                    pb.start();
-                }
-
-            } catch (IOException e) {
-                e.printStackTrace();
-                SwingUtilities.invokeLater(() ->
-                        JOptionPane.showMessageDialog(null,
-                                "Error launching: " + e.getMessage(),
-                                "Error",
-                                JOptionPane.ERROR_MESSAGE));
+            if (path.contains("com.") || path.contains("org.") || path.contains("us.")) {
+                pb = new ProcessBuilder("flatpak", "run", path);
             }
+            else if (path.charAt(0) >= '0' && path.charAt(0) <= '9') {
+                System.out.println("Launching Steam game with optimizations...");
+
+                // FIXED: Controller support + Better Steam launch
+                pb = new ProcessBuilder("steam", "-applaunch", path);
+
+                // CRITICAL: Controller/Input fixes
+                pb.environment().put("SDL_GAMECONTROLLER_ALLOW_BACKGROUND_EVENTS", "1");
+                pb.environment().put("SDL_JOYSTICK_THREAD", "1");
+                pb.environment().put("PROTON_ENABLE_NVAPI", "1");
+                pb.environment().put("PROTON_HIDE_NVIDIA_GPU", "0");
+                pb.environment().put("STEAM_RUNTIME_PREFER_HOST_LIBRARIES", "0");
+                pb.environment().put("LD_PRELOAD", "");  // Clear any blocking preloads
+
+                // Performance environment variables
+                pb.environment().put("PROTON_NO_ESYNC", "0");
+                pb.environment().put("PROTON_NO_FSYNC", "0");
+                pb.environment().put("PROTON_USE_WINED3D", "0");
+                pb.environment().put("PROTON_FORCE_LARGE_ADDRESS_AWARE", "1");
+                pb.environment().put("__GL_THREADED_OPTIMIZATIONS", "1");
+                pb.environment().put("__GL_SHADER_DISK_CACHE", "1");
+                pb.environment().put("__GL_SHADER_DISK_CACHE_SKIP_CLEANUP", "1");
+                pb.environment().put("DXVK_HUD", "0");
+                pb.environment().put("DXVK_STATE_CACHE", "1");
+                pb.environment().put("DXVK_LOG_LEVEL", "none");
+                pb.environment().put("RADV_PERFTEST", "aco");
+
+                // CPU governor optimization
+                try {
+                    new ProcessBuilder("bash", "-c",
+                            "echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor").start();
+                } catch (Exception e) {
+                    System.out.println("Could not set CPU governor (needs sudo)");
+                }
+            }
+            else if (path.contains("aUniquePathForLegendaryGames")) {
+                String gamePath = path.replace("aUniquePathForLegendaryGames", "");
+                launchLegendaryWithProtonGE(gamePath);
+            }
+
         }).start();
     }
 
-
-
     public void addSteamApp() throws IOException {
         String text = JOptionPane.showInputDialog("enter steam gameid");
-        ProcessBuilder pb = new ProcessBuilder("steam", "-applaunch","<" + text + ">");
+        ProcessBuilder pb = new ProcessBuilder("steam", "-applaunch", text);
         int save = JOptionPane.showConfirmDialog(null,"wanna save the game?");
         if (!savedJson(text) && save == JOptionPane.YES_OPTION) {
             String name = JOptionPane.showInputDialog("enter game name");
@@ -311,7 +328,6 @@ public class programHandler {
         }
         pb.start();
     }
-
 
     public void downloadCover(String appid) throws IOException {
         String imageUrl = "https://cdn.cloudflare.steamstatic.com/steam/apps/"
@@ -327,13 +343,10 @@ public class programHandler {
 
         try (InputStream in = new URL(imageUrl).openStream()) {
             Files.copy(in, Paths.get(appid + ".png"));
-        } catch (MalformedURLException e) {
-            throw new RuntimeException(e);
         }
     }
 
     public String[] getSteamGames(String apiKey, String steamId) throws Exception {
-
         String urlStr = "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"
                 + "?key=" + apiKey
                 + "&steamid=" + steamId
@@ -381,8 +394,6 @@ public class programHandler {
         JOptionPane.showMessageDialog(null, "SAVED: " + i + " games");
     }
 
-
-
     public void allLegendaryGames() throws IOException, InterruptedException {
         ProcessBuilder pb = new ProcessBuilder("legendary", "list");
         Process process = pb.start();
@@ -429,7 +440,7 @@ public class programHandler {
             }
         }
     }
-    //proton cause legendary wont detect controller
+
     public String getProtonGEPath() {
         String home = System.getProperty("user.home");
         Path base = Paths.get(home, ".local", "share", "ProtonGE");
@@ -531,6 +542,4 @@ public class programHandler {
             }
         }).start();
     }
-
-
 }
